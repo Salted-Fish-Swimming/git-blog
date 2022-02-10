@@ -16,7 +16,7 @@ const argv = process.argv.slice(2);
 
   const type = argv[0];
 
-  return await checkBlog(config, info);
+  await checkBlog(config, info);
 
   if (type === '-new') {
     const title = argv[1] ?? "题目";
@@ -24,5 +24,6 @@ const argv = process.argv.slice(2);
       info.blog.number += 1;
       saveInfo(info);
     });
+  } else if (type === '-check') {
   }
 })();

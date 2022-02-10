@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "new": "node index.js -new",
+    "check": "node index.js -check",
     "render": "echo '还没做'"
   },
   "keywords": [],
