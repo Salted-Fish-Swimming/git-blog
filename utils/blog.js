@@ -53,7 +53,6 @@ module.exports = {
 
     const newDirs = await fs.readdir(path, { encoding: 'utf-8' });
 
-    // 检查标题更新
     await Promise.allSettled(newDirs
       .map((subPath) => `${path}/${subPath}`)
       .map(async (path) => {
@@ -61,6 +60,7 @@ module.exports = {
         const md = Markdown.parse(content);
         const mdInfo = await loadJSON(`${path}/info.json`);
 
+        // 检查标题更新
         if (mdInfo.title != md.title()) {
           mdInfo.title = md.title();
           mdInfo['update-time'] = formatTime(new Date());
