@@ -1,381 +1,321 @@
-# 两种中间件模式
+# 子类型的逆变与协变- java 为什么没有泛型数组
 
-中间件模式, 也可以叫 AOP 模式, 还有一个名字叫面向切面编程,
-具体的模式用文字解释起来比较复杂, 直接上代码。
+一个现代的静态类型编程语言一般都要支持支持泛型系统以实现复用某些更高级的模块, 
+以最常见的排序函数为例.
 
-## before after 模式
+排序函数通常在内部使用一些优化过的排序方法, 
+这些算法通常比程序员现场手搓的性能要高.
+学过离散数学的我们知道, 一个集合要排序需要有一个全序关系, 
+即集合内的任意两个元素能比较大小.
 
-对于一个函数 f 我们想要知道他的执行相关的信息,
-就需要在每一个他出现的地方, 添加上检测 f 执行的函数。
+这两个条件变成函数的入参函数的签名就如下所示.
 
-```javascript
-function f (...params) {
-  console.log(params);
-}
+```ts
+// 排序函数的函数签名
+Sort<T>(
+  T[],              /* param1: 待排序数组 */
+  (T, T) => boolean /* param2: 比较函数 */
+) : T[] /* return: 排序完成数组 */
+```
 
-function before () {
-  console.log('函数准备执行');
-}
+为了使这个函数能接受各种各样的数组, 类型 `T` 就不能限定的太死.
+类型 `T` 可以是普通的基础类型(此处指无法被继续分解的类型),
+比如 `int, float, char` 等, 也可以是其它复合类型, 比如数组, 对象等.
 
-function after () {
-  console.log('函数执行完毕');
-}
+## 什么是泛型
 
-function run () {
-  // 想要获取 f 的调用信息,
-  // 就需要同时调用 before 和 after
-  before();
-  // 调用 f
-  f (1,2,3,4);
-  after();
+通过上面的例子我们可以看到, 有很大一部分代码是类型无关的,
+比如各种排序算法和各种容器类.
+
+我们可以简单的把泛型看成是一个返回类型的函数, 即
+
+```ts
+generic := (.../* 可以是类型也可以是值 */) => Type
+```
+
+对于上面的排序函数前面, 我门可以看作
+
+```ts
+type Sort<T> = (T[], (T, T) => boolean) => T[]
+```
+
+某些语言的类型系统支持依值类型,
+即这个返回类型的函数, 其参数也可以是值.
+
+一个缺少泛型系统的语言需要对为了通过编译器的类型检查需要编写大量的模板代码,
+这些模板代码在摧残程序员手指的同时也在摧残程序员的心智.
+
+同时, 更多的代码也意味着更多的测试和更多的编码工作量
+(即使有编辑器能够批量生成代码, 也需要检查审计生成的代码是否可靠).
+
+## 什么是子类型
+
+这里为了方便讨论, 我们简单定义为满足里氏替换原则
+(子类能够完全替换父类) 的类型就是子类型.
+
+对于 java 这样 all-in OOP 的语言, 其类继承机制就是天生支持里氏替换原则的.
+只要子类没有重写掉父类的方法, 子类的实例完全可以当作父类的实例使用,
+而不会与父类有任何区别.
+
+当 `B` 是 `A` 的子类型, `C` 是 `B` 的子类型时, `C` 也是 `A` 的子类型,
+可以看到子类型据有传递性, 子类型是一个偏序关系.
+
+```ts
+C extends B
+B extends A
+// 由以上两个条件可以推出
+C extends A
+```
+
+接下来我们看一个简单的例子.
+
+我们假设 `A` 是 `B` 的父亲类型 `C` 是 `B` 的子类型,
+同理, 我们对 `D` `E` `F` 也采取相同的定义.
+
+```ts
+C extends B extends A
+
+F extends E extends D
+```
+
+当存在一个类型为 `B => E` 的函数时, 我们想要替换掉这个函数,
+只要替换的这个函数和原函数的类型相同(不考虑程序逻辑), 就不会有问题.
+
+```ts
+// 比如这样
+const main = (param: B, callback: B => E) => {
+  let result: E = callback(param);
+  /* ... some code ... */
 }
 ```
 
-这种写法对程序员明显不友好, 需要显示的调用 before 和 after。
-而且也不利于 before 和 after 的逻辑复用。
+当我们传入一个类型为 `A => E` 的 `callback` 函数时, 也不会出现问题,
+因为传入的参数 `param` 是更具体的 `B` 类型,
+根据里氏替换原则的假设, 不会对这个函数的正常运行造成影响.
+即 `A => E` 类型的函数能够完全替换 `B => E` 类型的函数而不会导致错误.
+根据前面我们对于子类型的定义 ( 里氏替换原则 ) , 我们可以说
+`A => E` 是 `B => E` 的子类型.
 
-我们希望我们在调用 f 的时候, 和普通函数没有区别, 
-而且要能实现 before 和 after 的逻辑复用。
-所以, 我们通常会将 before 和 after 挂载到原型链上,
-然后调用 before 和 after 方法修饰函数。
+同样的, 当我们传入一个类型为 `B => F` 的 `callback` 的函数时,
+`callback` 返回的是更具体的 `F` 类型,
+如果当前上下文的后续代码是根据回调函数返回 `E` 类型而设计的,
+那么这段代码也不会有问题. 同样的,
+我们可以说 `B => E` 是 `B => F` 的子类型.
 
-```javascript
-function f (...params) {
-  console.log(params);
-}
+```ts
+(A => E) extends (B => E) extends (C => E)
+(B => F) extends (B => E) extends (B => D)
 
-Function.prototype.before = function (fn) {
-  const self = this;
-  return function () {
-    // 先执行挂载函数
-    fn.call(this);
-    // 再执行自身
-    self.apply(this, arguments);
-  }
-}
-
-Function.prototype.after = function (fn) {
-  const self = this;
-  return function () {
-    // 先执行自身
-    self.apply(this, arguments);
-    // 再执行挂载函数
-    fn.call(this);
-  }
-}
-
-f = f.before(() => {
-  // 挂载 befor 函数
-  console.log('函数准备执行');
-}).after(() => {
-  // 挂载 after 函数
-  console.log('函数执行完毕');
-}).before(() => {
-  // 可以不停的通过 before 和 after 挂载函数
-  console.log('挂载 before 函数')
-});
-
-function run () {
-  // 调用 f 就会自动执行 before 和 after 挂载的函数
-  f (1,2,3,4);
-  // 执行结果: 
-  // 挂载 before 函数
-  // 函数准备执行  
-  // [ 1, 2, 3, 4 ]
-  // 函数执行完毕  
-}
+(A => F) extends (B => E) extends (C => D)
 ```
 
-## next 模式
+## 逆变与协变
 
-上述的中间件模式已经可以嵌套挂载多个 before 和 after 函数了,
-看上去十分强大, 但如果我们需要 before 和 after 同时持有相同的状态呢？
+我们看到函数类型的子类型关于入参类型和出参类型发生了变化,
+函数类型的子类型关于入参类型变得更泛化, 关于出参类型变得更具体,
+写下来就是这样
 
-比如, 统计 f 的执行时间, 就需要 before 读取当前时间,
-after 减去 before 读取的时间,
-我们可以用闭包或者其它手段来来解决这个持有相同状态的问题。
-
-如果我们需要 before 不执行 f 怎么办呢？
-比如被 f 的参数不合法, 强行使用可能会导致系统错误,
-所以我们需要拦截这次调用, 但 before 并没有拦截函数调用的功能。
-我们可以改造 before 挂载函数, 使其能够拦截函数调用。
-
-如果我们想要修改传入的参数, 又应该怎么做呢？想必你们心中已经有答案了。
-
-我们更改一下 before 函数和 after 函数的执行格式。
-
-```javascript
-
-Function.prototype.use = function (middle) {
-  const self = this;
-  return function (params) {
-    // 将 self 传入中间件
-    return middle(params, self);
-  }
-}
-
-function f(params) {
-  console.log(params);
-}
-
-// 给 f 添加中间件
-f = f.use(function (params, next) {
-  // 这里是 before
-  console.log('开始计时');
-  // before 和 after 由于在相同的上下文里,
-  // 所以可以共享状态
-  const current = Date.now();
-  // next 就是被包装的函数 f
-  const result = next(params);
-  // 这里是after
-  const spend = Date.now() - current;
-  console.log('结束计时');
-  console.log(`运行消耗了 ${spend} ms`);
-  return result;
-})
-
-f('执行 f 函数');
-// 执行结果:
-// 开始计时
-// 执行 f 函数
-// 结束计时
-// 运行消耗了 0 ms
+```ts
+(S1 => T1)  extends  (S2 => T2)
+S2  extends  S1
+T1  extends  T2
 ```
 
-这样, 我们可以通过控制 next 函数的调用位置来控制这是一个 before 还是一个 after,
-亦或者是拥有相同上下文的 before 和 after。
-还可以通过控制 next 的调用与否, 拦截 f 函数的执行, 以及调整传入的参数,
-做一些非标准的类型转换。
+可以看到 `S` 类型变化与函数类型的变化相反,
+`T` 类型的变化与函数类型的变化相同.
 
-我们可以简单封装一下, 将其封装成一个类。
+- 函数的入参类型与函数本身的类型变化是相反的, 我们称这样的变化是逆变的,
+- 出参类型与函数本身的类型变化是相同的, 我们称这样的变化是协变的.
 
-```javascript
-class MiddlerWare {
+这其实就对应了 java 泛型通配符使用的 PECS 原则,
+java 泛型的 PECS 原则其实就对应了函数子类型的协变原则.
 
-  constructor () {
-    this.middle = new Array();
-  }
+其实函数类型可以看作是由两个类型组合成的更复杂具体的类型
 
-  use (...fns) {
-    fns.forEach(fn => this.middle.push(fn));
-    return this;
-  }
+```ts
+type Function<S, T> = S => T
+S2 extends S1
+T1 extends T2
 
-  unUse (fn) {
-    const index = this.middle.indexOf(fn);
-    if (index >= 0)
-      this.middle.splice(index, 1);
-    return this;
-  }
-
-  compose (info) {
-    if (this.middle.length > 0) {
-      const mixIn = (opts, f) => ({ ...opts, remove: () => this.unUse(f) });
-      return (next) => this.middle.reduce(
-        (f1, f2) => (opts, next) =>
-          f1(mixIn(opts, f1), () => f2(mixIn(opts, f2), next))
-      ) (info, next);
-    } else {
-      return (next) => next();
-    }
-  }
-
-}
+Function<S1, T1> extends Function<S2, T2>
 ```
 
-```javascript
-// 实例代码
+数组也可以看成是一个泛型
 
-const mid = new MiddlerWare();
-
-// 添加多个中间件
-mid.use((opts, next) => {
-  console.log('mid 1 s')
-  console.log(opts);
-  const result = next();
-  console.log('mid 1 e')
-  return result;
-}).use((opts, next) => {
-  console.log('mid 2 s')
-  console.log(opts);
-  const result = next();
-  console.log('mid 2 e')
-  return result;
-}, (opts, next) => {
-  console.log('mid 2 s')
-  console.log(opts);
-  const result = next();
-  console.log('mid 2 e')
-  return result;
-});
-
-function f (params) {
-  console.log(params);
-}
-
-f = f.use((params, next) => {
-  return mid.compose({params})(() => {
-    next(params)
-    return 0;
-  });
-});
-
-f([1,2,3,4,5]);
-// 执行结果:
-// mid 1 s
-// { params: [ 1, 2, 3, 4, 5 ], remove: [Function: remove] }
-// mid 2 s
-// { params: [ 1, 2, 3, 4, 5 ], remove: [Function: remove] }
-// mid 2 s
-// { params: [ 1, 2, 3, 4, 5 ], remove: [Function: remove] }
-// [ 1, 2, 3, 4, 5 ]
-// mid 2 e
-// mid 2 e
-// mid 1 e
+```ts
+type Array<T> = T[]
 ```
 
-## 两者如何相互转换
+那么数组泛型关于 `T` 是逆变的还是协变的呢？
 
-正因为 next 回调式的中间件 api 是如此的优秀,
-使其出现在了几乎格式的支持中间件的框架种,
-比如 nodejs 中著名的 Koa 就是以异步中间件的洋葱模型而闻名于世的。
+我们可以先尝试找到数组类型的子类型,
+我们假设存在 `A` `B` `C` 三个类型, 这三个类型对应的子类型关系如下
 
-但是这种 api 并不是没有缺点, 我们先来看看异步函数的中间件。
-
-```javascript
-async function middle (ctx, next) {
-  console.log('mid s');
-  await next();
-  console.log('mid e');
-}
-
-function f(params) {
-  console.log(params);
-}
-
-// 用立即执行函数覆盖掉子作用域中的 f ,
-// 避免污染父作用域的 f 造成无限递归
-f = params  => (f => { middle({}, () => f(params)); })(f);
-
-f([1,2,4]);
+```ts
+C extends B extends A
 ```
 
-虽然在异步函数 middle 中共享了上下文, 但有些时候,
-这个 next 的异步函数会等待很长时间。
-长到会打乱程序的顺序结构, 长到 before 和 after 需要分开调用。
+我们先假设 `B[]` 的子类型是 `A[]`.
 
-比如在 react 和 vue 等著名前端框架中,
-会有关于 dom 生命周期的钩子函数, 以 vue 为例,
-vue 有一对 beforeMount 和 mounted 的钩子,
-和一对 beforeDestroy 和 destroye 的钩子,
-这些 api 有点类似之前 before 和 after 的中间件形式。
+对于一个变量 `let x: A[]`, 我们根据预期的类型, 希望里面存入的是 `A` 的子类型.
 
-我们想要将其写成 next 的形式。
+假设存在一个变量 `let y: B[]`, 根据前面的假设, 这个变量的值可以是 `y = x`,
 
-```javascript
-const hooks = {
-  befor () {
-    // ... todo something
-  },
-  after () {
-    // ... todo something
-  }
-}
+```ts
 
-// =-- 改写成 --=
-
-async hooks (next) {
-  // before ... todo something
-  await next();
-  // after ... todo something
-}
+let x: A[] = [new A(), new A(), /* ... */];
+let y: B[] = x;
 ```
 
-意味着我们要把一个异步函数, 拆成两个同步函数, 然后挂载到对应的监听器上。
+则从 `y` 里就有可能取出类型 `A` 的值, 一个类型不是 `B` 及其子类型的值.
 
-```javascript
-async function middle (next) {
-  console.log('start');
-  await next();
-  console.log('end');
-}
-
-function gain (middle) {
-  let handler = null;
-  // 阻塞异步函数 middle
-  const block = () => (new Promise((res, rej) => handler = res));
-  const f1 = () => middle(block);
-  const f2 = () => handler(0);
-  return [f1, f2];
-}
-
-// 这样, 我们就把一个回调函数拆成了两个同步函数
-const [f1, f2] = gain(middle);
-
-// 挂载到对应的监听器上。
-setTimeout(() => {
-  f1();
-}, 1000);
-
-setTimeout(() => {
-  f2();
-}, 2000);
-// start 在 1s 后打印
-// end   在 2s 后打印
+```ts
+// y 的类型是 B[], 应该取出 B 类型或者其子类型的值,
+// 而不是 A 类型的值
+let readx: B = y[0] // error
+// y 中取出了类型不安全的值
 ```
 
-这意味着我们可以像编写 koa 中间件一样编写这些回调函数。
-我们可以把资源的申请和释放写在一个函数里而不用跨越作用域。
+有人说, 把 readx 的类型设置为 A 不久好了吗?
+很遗憾, 这种拍脑袋的想法是行不通的,
+因为给 `y` 赋值的 `x` 有可能是函数外部传进来的参数,
+你不知道使用你编写的库函数的人会传入什么类型的数组.
 
-vue 的完整生命周期由组件创建、挂载、卸载几个阶段构成。
-所以写成异步函数的模式的话需要更多的阻塞参数。
+所以数组类型不能是协变的, 那么数组类型会不会是逆变的呢？
 
-```javascript
-async function fullLife (creating, compiling, mounting, lifing, unMounting) {
-  // beforeCreate hooks
-  await creating();
-  // ceated hooks
-  await compiling();
-  // beforeMount hooks
-  await mounting();
-  // mounted hooks
-  await lifing();
-  // beforeUnmount hooks
-  await unMounting();
-  // unmounted hooks
-}
+即, 假设 `B[]` 的子类型是 `C[]` .
 
-function gain(fullLife) {
-  const handler = [];
-  const block = [
-    () => (new Promise(res => handler[0] = res)),
-    () => (new Promise(res => handler[1] = res)),
-    () => (new Promise(res => handler[2] = res)),
-    () => (new Promise(res => handler[3] = res)),
-    () => (new Promise(res => handler[4] = res)),
-  ];
-  return [
-    () => fullLife(...block),
-    () => handler[0](),
-    () => handler[1](),
-    () => handler[2](),
-    () => handler[3](),
-    () => handler[4](),
-  ]
-}
+同样, 我们假设又存在一个变量 `let z: C[]` , 根据上面的假设,
+因为 `C[]` 是 `B[]` 的子类型,
+所以 `C[]` 类型的值可以赋值给 `B[]` 类型的变量.
+一个类型为 `C[]` 的变量 `z` 可以赋值给 `y`,
+我们往 `y` 数组里合法的填入一个类型为 `B` 的值.
 
-// 将一个全生命周期的函数拆成了多个生命周期的钩子函数
-const [
-  beforeCreate,
-  created,
-  beforeMount,
-  mounted,
-  beforeUnmount,
-  unmounted,
-] = gain(fullLife);
+```ts
+let z: C[] = [];
+let y: B[] = z;
+y[0] = new B();
 ```
 
-# 结语
+再从 `z` 里取出这个值时,
+会发现取出了一个类型不安全的 `B` 的值.
 
-`after / before` 模式和 `next` 模式, 在其它文章中已有详细的论述,
-本文重点在于讨论两者的转换, 以及可能的应用场景。
+```ts
+let readz: C = z[0];
+```
+
+因为在后续的代码中可能会使用一些 `C` 类型独有的属性,
+而 `B` 类型没有的属性值, 这会导致类型不安全.
+
+所以数组类型也不是逆变的.
+
+所以, 对于普通编程语言中的可读可写数组 `T[]` 而言,
+其既不是逆变的, 也不是协变的.
+
+像这样既不是逆变的, 也不是协变的泛型, 我们通常称其为不变的.
+大多数编程语言都将泛型设置为不变的.
+
+### java 的泛型数组
+
+java 的数组是协变的, 但协变数组有可能往里面写入不安全的类型.
+这导致了 java 无法仅通过静态类型检查做到类型安全.
+
+> 我们把这叫做 type soundness
+
+因为要做运行时类型检查, 所以数组的类型就需要在声明时确定.
+
+而 java 的泛型又是基于类擦除机制,
+导致 java 的泛型代码编译以后所有的泛型在字节码里都是 Object 类型.
+这意味着泛型数组类型脱离了类型检查, 会造成上述所说的类型不安全的隐患.
+
+所以为了保持类型安全 java 不允许创建泛型数组,
+只能通过反射的方式获取类型后再根据类型创建对应类型的数组.
+
+> 最新的 java 可以创建泛型数组,
+> 但只是放松了类型检查, 创建的实际上是 Object 数组,
+> 你从一个类型比较严格的泛型数组中还是有可能取出 Object 出来
+
+经过这么一分析, 似乎 java 设计数组协变就是个错误?
+不是, java 的这个设计并不仅仅是个设计错误, 而是一个妥协的产物.
+
+在 java 最初的版本中没有泛型, 但泛型数组的需求是十分迫切的.
+如果没有泛型数组, 意味着相同的算法用不同数据类型的代码都要写一份,
+无法针对不同的数据类型抽象出一个通用的排序算法,
+而数组协变, 在这里就起一个泛型数组的作用.
+java 最初的协变数组, 是当成泛型数组使用的.
+
+当初 java 的开发任意没有足够的工程能力在 java 上再添加一个泛型系统,
+如今还要给新的编程语言加上这个特性只能说是不思进取了
+
+> 说得就是你 TS , 而且函数还是双变的 ( 指既是逆变也是协变的 ),
+> ~~这已经不是普通的叛徒了, 要出重拳~~,
+> 但函数双变可以通过 `strictFunctionTypes` 选项设置成符合上述协变规则的形式,
+> 但数组就没没有相关选项可以调整了.
+>
+> ~~像 TS 这种一味的为了所谓照顾用户, 而罔顾科学实事的行为,
+> 到头来, 一定是搬起石头砸自己的脚~~ .
+>
+> 数组可以尽量避免移动赋值, 即将一个数组赋值给另一个数组,
+> 大多数的数组协变导致的类型不安全都是由于共享变量造成的.
+
+### 那我即想要数组协变又想要泛型数组呢?
+
+那数组的读取和写入就不应该耦合在一起, 换句话说,
+可读的数组和可写的数组对应两种类型:
+
+- 可读的数组只能读取值而不能修改值,
+
+- 可写的数组只能写入值而不能读取值 ( 想象向一个黑洞写入值,
+  你只指导你写入值, 但黑洞里面是什么, 你完全不知道 ) .
+
+可读的数组是逆变, 而可写的数组是协变的.
+或者像 rust 一样有变量借出机制, 天然区别可读可写.
+
+## 总结
+
+一个现代的带有类型标注的语言 ( 我也不想辨 **强/弱类型** 和 **静/动类型** 的经了,
+这里指的类型标注是指编程时要声明变量的类型 ) , 不可能没有泛型系统.
+
+泛型可以看作是一个关于类型的函数, 它输入一个类型, 输出一个类型.
+
+因为 **里氏替换原则** 要求我们子类能够替代父类使用,
+所以子类型关系可以简单的看作是继承关系.
+
+有了子类型关系和泛型,
+我们很自然就会分析泛型的子类型和泛型依赖的参数的子类型关系的关系,
+这样的关系可以分为两种, **逆变** 和 **协变** .
+
+- 泛型本身和泛型依赖的参数类型呈相同变化的就是 **协变** ( co-variance ) .
+
+- 泛型本身和泛型依赖的参数类型呈相反变化的就是 **逆变** ( contra-variance ) .
+
+- 既是逆变也是协变的我们称其为 **双变** ( bi-variance ) .
+
+- 两个都不满足的我们称为 **不变** ( in-variance ) .
+
+```ts
+// 对于一个泛型T
+Type T<A>
+// 如果对于任意的两个类型满足如下关系的 A1 和 A2,
+A1 extends A2
+// 有
+T<A1> extends T<A2>
+// 我们就称泛型 T 为协变的
+// 如果有
+T<A2> extends T<A1>
+// 我们就称泛型 T 是逆变的
+// 两者都满足, 我们就称为双变的
+// 两者都不满足我们称其为不变的
+```
+
+函数泛型对于参数是逆变的, 对于返回值则是协变的.
+关于函数的型变规律, java 壬专门总结了一套 PECS 的泛型通配符使用规则.
+
+>  java 的泛型通配符是另一个话题了, 下次再说.  
+
+数组泛型应该是不变的, 否则有可能往里写入类型不安全的值.
+
+泛型通常是不变的, 数组就是一种很典型的情况 ( 但大多数语言又都认为数组是协变的 ),
+大多数编程语言也默认泛型是不变的 ( 除了 Dart, 它默认所有泛型都是协变的 ) .
+双变的就更少了, 因为双变会破坏子类型的偏序关系
+( 两个不同的数 a 和 b, 不可能 a 即比 b 大, 又比 b 小).
