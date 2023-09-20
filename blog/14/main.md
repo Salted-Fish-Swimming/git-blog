@@ -8,5 +8,5 @@
 
 ### 交换子/换位子
 
-$\forall g, h \in G$
+$\forall g, h \in G$ $ghg^{-1}h^{-1}$
 
