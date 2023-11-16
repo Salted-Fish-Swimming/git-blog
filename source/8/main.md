@@ -30,7 +30,7 @@ React Hooks 尝试用 useEffect 去管理生命周期这个行为本身就不是
 
 首先, 为什么要有 Hooks API ? Hooks API 是什么？
 
-要回答这个问题
+要回答这个问题, 我们首先要回答 React 是如何理解 UI 开发的.
 
 ## 怎么管理副作用？
 
